@@ -103,8 +103,5 @@ CL-USER> (asdf:load-system :sl)
                 | <package>
                 | <package> <more packages>
 #+END_EXAMPLE
-* Issues:
-- This is a new thing.
-
 * Non-issues:
 - defsl is a hygienic macro

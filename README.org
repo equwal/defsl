@@ -1,0 +1,110 @@
+#+TITLE: SL: A Package Dependency Language
+#+AUTHOR: Spenser Truex
+#+EMAIL: web@spensertruex.com
+
+[[https://github.com/equwal/sl][Github]] | [[https://spensertruex.com/sl--dependency-language][Homepage]]
+
+
+SL is a Domain Specific Language (ie. simple programming language) for dealing
+with ambiguous dependency situations. It is more expressive than the standard
+method in Common Lisp: the use of reader macros. It provides symbol aliasing
+based on compile-time rules.
+
+* Benefits
+
+- Symbol aliasing at compile time provides a means of abstracting separate but
+similar interfaces. Forked projects, or projects that duplicate work.
+- Far more expressive and concise than reader macros, while still very simple.
+- There is also the use case of renaming things for import, like =with-gensyms= to =with-unique-names= or similar.
+
+* Drawbacks
+
+All the drawbacks of a new, experimental program apply.
+
+* Examples
+
+  The only external macro is =defsl=. There is BNF below, though some examples are in order.
+
+** Simple
+   This defines =operator-arglist= (in the current package) as
+   =slynk:operator-arglist=, unless =slynk= is unavailable, in which case
+   =swank:operator-arglist= is used.
+
+#+BEGIN_SRC lisp
+(defsl operator-arglist :fn :eq slynk swank)
+#+END_SRC
+
+The =:fn= shows that a FUNCTION is being defined, as opposed to a =:sym= symbol;
+to define another namespace a list is required: =(accessor-fn boundp-fn)=. =:eq=
+denotes that the packages have the same name for this function.
+For this simplest of examples, consider the reader macro alternative.
+
+#+BEGIN_SRC lisp
+#+slynk
+(setf (symbol-function 'operator-arglist)
+      slynk:operator-arglist)
+#+(and (not slynk) swank)
+(setf (symbol-function 'operator-arglist)
+      swank:operator-arglist)
+#+END_SRC
+
+** Complex example
+
+#+BEGIN_SRC lisp
+(defsl gensymmer (macro-function macro-function)
+    utils with-unique-names
+    alexandria with-gensyms)
+#+END_SRC
+
+To break this down:
+- =gensymmer= is now defined as =utils:with-unique-names=.
+- =macro-function= was used twice: once as a =setfable= place, and once as a
+predicate.
+- If the =utils= package does not exist, then =sl::gensymmer= is defined as
+  =alexanrdia:with-gensyms=.
+-  to define different names for each package, they must be "qualified" with the
+  package name.
+
+* Rationale and Purpose
+
+I made this since =asdf= was not enough abstraction for what I needed: to
+arbitrarily choose dependencies and renames for any symbol. I could write what I
+am doing twice, or I could write the compiler for =SL= (ie. the first two
+letters of SLy and SLime). Once I have that, I can bend that fork until I have a
+coherent set of names for all the functions I need, and which work on both (in
+principle). You could just intern the symbols (like with #+ reader syntax) but
+those tend to explode exponentially; since SL is 100% compile-time, it is
+similar, to reader macros but more expressive.
+
+* Install
+  Use ASDF to install. Usually this should work:
+#+BEGIN_SRC sh
+$ cd ~/common-lisp/
+$ git clone git@github.com:equwal/sl.git
+CL-USER> (asdf:load-system :sl)
+#+END_SRC
+
+* BNF
+#+BEGIN_EXAMPLE
+(defsl <sl-name> <fnsym>  <package spec>)
+<package spec> ::= <eq>
+               | <packages>
+<eq> ::= :eq <preferences>
+<fnsym> ::= :fn
+        | :sym
+        | <fnpair>
+
+<fnpair> ::= (setfable-place bound-predicate)
+<packages> ::= <package> <fn name> <more packages>
+<package> ::= symbol
+<fn name> ::= symbol
+<preferences> ::= <package> <more packages>
+<more packages> ::= ε
+                | <package>
+                | <package> <more packages>
+#+END_EXAMPLE
+* Issues:
+- This is a new thing.
+
+* Non-issues:
+- defsl is a hygienic macro

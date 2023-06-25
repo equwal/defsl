@@ -2,25 +2,52 @@
 #+AUTHOR: Spenser Truex
 #+EMAIL: web@spensertruex.com
 
-[[https://github.com/equwal/sl][Github]] | [[https://spensertruex.com/sl--dependency-language][Homepage]]
-
 Version 1.0 is out!
+
+[[https://github.com/equwal/sl][Github]] | [[https://equwal.com/sl--dependency-language][Homepage]]
+
+SL is a complex dependency fixer.
+
+Use SL to support two wildly different forks of a library like swank
+and slynk.
+
+#+BEGIN_SRC
+(defsl operator-arglist :fn :eq slynk swank)
+#+END_SRC
 
 SL is a Domain Specific Language (ie. simple programming language) for dealing
 with ambiguous dependency situations. It is more expressive than the standard
 method in Common Lisp: the use of reader macros. It provides symbol aliasing
 based on compile-time rules.
 
+Symbols are then defined in the SL package, which is an artifact of the
+fact that it was designed primarily to allow supporting both the slynk
+and swank language servers.
+
+TODO: allow defining them in other packages
+
+* Rationale and Purpose
+
+I made this since =asdf= was not enough abstraction for what I needed: to
+arbitrarily choose dependencies and renames for any symbol. I could write what I
+am doing twice, or I could write the compiler for =SL= (ie. the first two
+letters of SLy and SLime). Once I have that, I can bend that fork until I have a
+coherent set of names for all the functions I need, and which work on both (in
+principle). You could just intern the symbols (like with #+ reader syntax) but
+those tend to explode exponentially; since SL is using the compiler,
+a much more powerful solution is implemented in macros.
+
 * Benefits
 
-- Symbol aliasing at compile time provides a means of abstracting separate but
-similar interfaces. Forked projects, or projects that duplicate work.
+- Symbol aliasing at compile time provides a means of abstracting separate
+but similar interfaces. Forked projects, or projects that duplicate work.
 - Far more expressive and concise than reader macros, while still very simple.
-- There is also the use case of renaming things for import, like =with-gensyms= to =with-unique-names= or similar.
+- There is also the use case of renaming things for import, like
+=with-gensyms= to =with-unique-names= or similar.
 
 * Drawbacks
 
-All the drawbacks of a new, experimental program apply.
+none
 
 * Examples
 
@@ -58,24 +85,11 @@ For this simplest of examples, consider the reader macro alternative.
 #+END_SRC
 
 To break this down:
-- =gensymmer= is now defined as =utils:with-unique-names=.
+- =sl:gensymmer= is now defined as =utils:with-unique-names=.
 - =macro-function= was used twice: once as a =setfable= place, and once as a
 predicate.
-- If the =utils= package does not exist, then =sl::gensymmer= is defined as
-  =alexanrdia:with-gensyms=.
--  to define different names for each package, they must be "qualified" with the
-  package name.
-
-* Rationale and Purpose
-
-I made this since =asdf= was not enough abstraction for what I needed: to
-arbitrarily choose dependencies and renames for any symbol. I could write what I
-am doing twice, or I could write the compiler for =SL= (ie. the first two
-letters of SLy and SLime). Once I have that, I can bend that fork until I have a
-coherent set of names for all the functions I need, and which work on both (in
-principle). You could just intern the symbols (like with #+ reader syntax) but
-those tend to explode exponentially; since SL is 100% compile-time, it is
-similar, to reader macros but more expressive.
+- If the =utils= package does not exist, then =sl:gensymmer= is defined as =alexanrdia:with-gensyms=.
+- to define different names for each package, they must be "qualified" with the package name.
 
 * Install
   Use ASDF to install. Usually this should work:

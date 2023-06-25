@@ -22,10 +22,15 @@
 (defmacro defweak-strings (namespace boundp sl-name &rest qualified-names)
   "Make a weak definition, based on preferences. Probably should use wrapper
 functions instead of this one, as it takes string arguments."
-  `(setf (,namespace (intern ,sl-name))
-         (multiple-value-bind (symname package)
-             (select-preference ',boundp ',(group qualified-names 2))
-           (,namespace (intern symname package)))))
+  (with-gensyms (symname package new-namespace)
+    `(let (,new-namespace)
+       (setf (symbol-function ',new-namespace) (symbol-function ',namespace))
+       (multiple-value-bind (,symname ,package)
+           (select-preference ',boundp ',(group qualified-names 2))
+         (setf (symbol-function (intern ,symname))
+               (funcall (symbol-function ',new-namespace)
+                        (intern ,symname ,package)))))))
+
 #+5am (show-boundfn operator-arglist
                   (defweak-strings symbol-function fboundp "OPERATOR-ARGLIST"
                     "SWANK" "OPERATOR-ARGLIST"
@@ -34,8 +39,9 @@ functions instead of this one, as it takes string arguments."
 (defmacro defweak (namespace boundp sl-name &rest qualified-names)
   "Symbol wrapper for defweak-strings."
   `(defweak-strings ,namespace ,boundp ,(symbol-name sl-name)
-     ,@(loop for q in qualified-names
-             collect (symbol-name q))))
+      ,@(loop for q in qualified-names
+              collect (symbol-name q))))
+
 #+5am (show-boundfn operator-arglist
         (defweak symbol-function fboundp operator-arglist
                       swank operator-arglist
@@ -43,29 +49,28 @@ functions instead of this one, as it takes string arguments."
 
 (defmacro defequivs (namespace boundp sl-name &rest packages)
   "Define a name which is already the same in multiple packages."
-  `(defweak ,namespace ,boundp ,sl-name
-     ,@(append (interpol sl-name packages) (list sl-name))))
+  `(defweak ,namespace ,boundp ,sl-name ,@packages))
+
 #+5am (show-boundfn operator-arglist (defequivs symbol-function fboundp operator-arglist swank slynk))
 
 
-(defmacro defsl (sl-name fn-sym eq-ql &rest preflist)
+(defmacro defsl (sl-name fn eq-ql &rest preflist)
   (with-gensyms (fs qq)
-    `(let ((,fs ,fn-sym)
+    `(let ((,fs (if (functionp ',fn)
+                    ',fn
+                    (symbol-function ',fn)))
            (,qq ,eq-ql))
+       (cond ((eql `(,,fs ,,qq) '(:fn :eq))
+              (defequivs symbol-function fboundp ,sl-name ,@preflist))
+             ((eql `(,,fs ,,qq) '(:sym :eq))
+              (defequivs symbol-value boundp ,sl-name ,@preflist))
+             ((eql ,fs `(:fn ,,qq))
+              (defweak symbol-function fboundp ,sl-name ,qq))
+             ((eql ,fs `(:sym ,,qq))
+              (defweak symbol-value boundp ,sl-name ,qq))
+             (t (if (eql ,qq :eq)
+                    (defequivs ,fn ,sl-name ,@preflist)
+                    (defweak ,fs ,sl-name ,qq)))))))
 
-       `(case ,(list ,fs ,qq)
-          ;; raw case
-          ((:fn :eq)  (defequivs symbol-function fboundp ,sl-name ,@preflist))
-          ((:sym :eq) (defequivs symbol-value boundp ,sl-name ,@preflist))
-
-          ;; car cases
-          (otherwise
-           (case ,fs
-             ((:fn ,qq)  (defweak symbol-function fboundp ,sl-name ,@(pack qq)))
-             ((:sym ,qq) (defweak symbol-value boundp ,sl-name ,@(pack qq)))
-             (otherwise
-              (if (eql ,qq :eq)
-                  (defequivs ,@(pack fn-sym) ,sl-name ,@preflist)
-                  (defweak ,@(pack fs) ,sl-name ,@(pack qq))))))))))
-#+5am (defsl operator-arglist (symbol-function 'fboundp) :eq slynk swank)
+#+5am (defsl operator-arglist fboundp :eq slynk swank)
 #+5am (defsl operator-arglist :fn :eq slynk swank)

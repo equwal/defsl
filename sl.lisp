@@ -2,4 +2,4 @@
 
 (in-package :sl)
 
-(defequivsfn operator-arglist)
+;(defequivsfn operator-arglist)

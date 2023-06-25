@@ -4,6 +4,7 @@
 
 [[https://github.com/equwal/sl][Github]] | [[https://spensertruex.com/sl--dependency-language][Homepage]]
 
+Version 1.0 is out!
 
 SL is a Domain Specific Language (ie. simple programming language) for dealing
 with ambiguous dependency situations. It is more expressive than the standard

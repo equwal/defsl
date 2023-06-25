@@ -2,7 +2,7 @@
 (in-package :sl-system)
 
 (defsystem :sl
-  :version      "0.0.1"
+  :version      "1.0"
   :description  "Wrapper for the lowest common denominator of Sly and Slime"
   :author       "Spenser Truex <truex@equwal.com>"
   :serial       t

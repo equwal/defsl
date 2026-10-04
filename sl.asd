@@ -8,8 +8,17 @@
   :serial       t
   :license      "GNU GPL v3"
   :components ((:file "package")
-               (:file "utils")
                (:file "macrolayer")
                (:file "sl"))
   :weakly-depends-on (:slynk :swank)
-  :depends-on (:alexandria))
+  :in-order-to ((test-op (test-op :sl/test))))
+
+(defsystem :sl/test
+  :description  "Tests for SL, with fixture forks and with real forks"
+  :depends-on (:sl :fiveam :slynk :swank :md5 :eos :cl-utilities :alexandria
+               (:feature :sbcl (:require :sb-md5)))
+  :components ((:file "test"))
+  :perform (test-op (o c)
+             (unless (uiop:symbol-call :fiveam :run!
+                                       (uiop:find-symbol* :sl :sl-test))
+               (error "The SL tests failed."))))

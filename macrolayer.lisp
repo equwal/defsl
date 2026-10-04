@@ -1,76 +1,58 @@
-;;; This file is meant to provide a macro layer for Sly and Slime
-
-
-;;; This contains a few things:
-;;; - 5AM is used for testing, but only if it is a *features* member.
-
-;;; The abstraction gets more specific as you go to the end of the file.
+;;; DEFSL gives a name to the first available definition among forks.
+;;;
+;;; The macro only parses its arguments. RESOLVE makes the choice when the
+;;; expansion runs, from strings. Thus the reader needs none of the packages.
 
 (in-package :sl)
 
-#+5am (defmacro show-bound (unbind predicate thing &body body)
-        `(progn (,unbind ',thing)
-                ,@body
-                (,predicate ',thing)))
-#+5am (defmacro show-boundfn (fn &body body)
-       `(show-bound fmakunbound fboundp ,fn ,@body))
-#+5am (defmacro show-boundvar (var &body body)
-        `(show-bound makunbound boundp ,var ,@body))
+(defun namespace (designator)
+  "Return the accessor and the bound-predicate that DESIGNATOR names."
+  (case designator
+    (:fn '(symbol-function fboundp))
+    (:sym '(symbol-value boundp))
+    (t designator)))
 
-#+5am (select-preference 'fboundp '(("SLYNK" "OPERATOR-ARGLIST")))
+(defun candidates (name spec)
+  "Return the (package-name symbol-name) pairs of SPEC, best first."
+  (cond ((eq (first spec) :eq)
+         (loop for package in (rest spec)
+               collect (list (string package) (string name))))
+        ((evenp (length spec))
+         (loop for (package symbol) on spec by #'cddr
+               collect (list (string package) (string symbol))))
+        (t (error "DEFSL ~S: a package in ~S has no symbol." name spec))))
 
-(defmacro defweak-strings (namespace boundp sl-name &rest qualified-names)
-  "Make a weak definition, based on preferences. Probably should use wrapper
-functions instead of this one, as it takes string arguments."
-  (with-gensyms (symname package new-namespace)
-    `(let (,new-namespace)
-       (setf (symbol-function ',new-namespace) (symbol-function ',namespace))
-       (multiple-value-bind (,symname ,package)
-           (select-preference ',boundp ',(group qualified-names 2))
-         (setf (symbol-function (intern ,symname))
-               (funcall (symbol-function ',new-namespace)
-                        (intern ,symname ,package)))))))
+(defun resolve (name boundp candidates)
+  "Return the first of CANDIDATES that is a symbol which satisfies BOUNDP."
+  (loop for (package symbol-name) in candidates
+        for symbol = (and (find-package package)
+                          (find-symbol symbol-name package))
+        when (and symbol (funcall boundp symbol))
+          return symbol
+        finally (error "DEFSL ~S: no definition is available in ~
+                        ~{~{~A:~A~}~^, ~}."
+                       name candidates)))
 
-#+5am (show-boundfn operator-arglist
-                  (defweak-strings symbol-function fboundp "OPERATOR-ARGLIST"
-                    "SWANK" "OPERATOR-ARGLIST"
-                    "SLYNK" "OPERATOR-ARGLIST"))
+(defmacro defsl (name namespace &rest spec)
+  "Define NAME as the first available definition that SPEC lists.
 
-(defmacro defweak (namespace boundp sl-name &rest qualified-names)
-  "Symbol wrapper for defweak-strings."
-  `(defweak-strings ,namespace ,boundp ,(symbol-name sl-name)
-      ,@(loop for q in qualified-names
-              collect (symbol-name q))))
+NAMESPACE is :FN for a function, :SYM for a variable, or a list
+(ACCESSOR BOUNDP). ACCESSOR is a SETF-able function of a symbol. BOUNDP is a
+predicate of a symbol.
 
-#+5am (show-boundfn operator-arglist
-        (defweak symbol-function fboundp operator-arglist
-                      swank operator-arglist
-                      slynk operator-arglist))
+SPEC is :EQ and the packages that share NAME, or pairs of a package and a
+symbol. A candidate is available if its package exists, the package has the
+symbol, and the symbol satisfies BOUNDP.
 
-(defmacro defequivs (namespace boundp sl-name &rest packages)
-  "Define a name which is already the same in multiple packages."
-  `(defweak ,namespace ,boundp ,sl-name ,@packages))
+  (defsl operator-arglist :fn :eq slynk swank)
+  (defsl gensymmer (macro-function macro-function)
+    utils with-unique-names
+    alexandria with-gensyms)
 
-#+5am (show-boundfn operator-arglist (defequivs symbol-function fboundp operator-arglist swank slynk))
-
-
-(defmacro defsl (sl-name fn eq-ql &rest preflist)
-  (with-gensyms (fs qq)
-    `(let ((,fs (if (functionp ',fn)
-                    ',fn
-                    (symbol-function ',fn)))
-           (,qq ,eq-ql))
-       (cond ((eql `(,,fs ,,qq) '(:fn :eq))
-              (defequivs symbol-function fboundp ,sl-name ,@preflist))
-             ((eql `(,,fs ,,qq) '(:sym :eq))
-              (defequivs symbol-value boundp ,sl-name ,@preflist))
-             ((eql ,fs `(:fn ,,qq))
-              (defweak symbol-function fboundp ,sl-name ,qq))
-             ((eql ,fs `(:sym ,,qq))
-              (defweak symbol-value boundp ,sl-name ,qq))
-             (t (if (eql ,qq :eq)
-                    (defequivs ,fn ,sl-name ,@preflist)
-                    (defweak ,fs ,sl-name ,qq)))))))
-
-#+5am (defsl operator-arglist fboundp :eq slynk swank)
-#+5am (defsl operator-arglist :fn :eq slynk swank)
+The definition exists at compile time, so a file can use an alias of a macro
+that it defines."
+  (destructuring-bind (accessor boundp) (namespace namespace)
+    `(eval-when (:compile-toplevel :load-toplevel :execute)
+       (setf (,accessor ',name)
+             (,accessor (resolve ',name #',boundp ',(candidates name spec))))
+       ',name)))
